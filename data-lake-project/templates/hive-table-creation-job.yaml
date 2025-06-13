@@ -1,0 +1,105 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-hive-table-creation-job
+  annotations:
+    "helm.sh/hook": post-install, post-upgrade
+    "helm.sh/hook-weight": "3"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      securityContext:
+        runAsUser: 0
+        fsGroup: 0
+      containers:
+      - name: hive-table-creation
+        image: custom-hive:0.0.1
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          echo "Waiting for HiveServer2 to be ready..."
+          timeout 1200 bash -c 'until nc -z data-lake-hive 10000; do echo "Waiting for data-lake-hive:10000..."; sleep 5; done' || { echo "Timed out waiting for data-lake-hive:10000"; exit 1; }
+          echo "HiveServer2 is ready!"
+          echo "Checking file permissions..."
+          ls -ld /tmp /home/hive /etc/hive/conf /opt/hive /opt/hive/extra-lib
+          echo "Checking hive-site.xml..."
+          cat /etc/hive/conf/hive-site.xml
+          export HIVE_CONF_DIR=/etc/hive/conf
+          export HADOOP_CLASSPATH=/opt/hive/extra-lib/postgresql-42.7.4.jar:/opt/hive/extra-lib/hadoop-aws-3.3.1.jar:/opt/hive/extra-lib/aws-java-sdk-bundle-1.12.262.jar:/opt/hive/extra-lib/HikariCP-5.0.1.jar
+          export HIVE_AUX_JARS_PATH=/opt/hive/extra-lib/postgresql-42.7.4.jar:/opt/hive/extra-lib/hadoop-aws-3.3.1.jar:/opt/hive/extra-lib/aws-java-sdk-bundle-1.12.262.jar:/opt/hive/lib/libthrift-0.14.1.jar:/opt/hive/extra-lib/HikariCP-5.0.1.jar
+          echo "Creating SQL script for database and table..."
+          cat > /tmp/create_weather.sql << 'EOF'
+          CREATE DATABASE IF NOT EXISTS weather;
+          USE weather;
+          CREATE TABLE IF NOT EXISTS weather_data (
+            station_id STRING,
+            record_date DATE,
+            temperature_max DOUBLE,
+            temperature_min DOUBLE,
+            precipitation DOUBLE,
+            snow DOUBLE,
+            elevation DOUBLE,
+            name STRING,
+            latitude DOUBLE,
+            longitude DOUBLE
+          )
+          PARTITIONED BY (country_code STRING, year INT, month INT)
+          STORED AS PARQUET
+          LOCATION 's3a://hive-warehouse/weather.db/weather_data';
+          EOF
+          echo "Running SQL script with beeline..."
+          /opt/hive/bin/beeline -u "jdbc:hive2://data-lake-hive:10000/;transportMode=binary" -n hive -p hivepassword --verbose=true -f /tmp/create_weather.sql 2>&1 | tee /tmp/hive-job.log
+          if [ $? -ne 0 ]; then
+            echo "Beeline failed to execute SQL script."
+            cat /tmp/hive-job.log
+            exit 1
+          fi
+          echo "Verifying database and table creation..."
+          cat > /tmp/verify_weather.sql << 'EOF'
+          SHOW DATABASES;
+          USE weather;
+          SHOW TABLES;
+          EOF
+          /opt/hive/bin/beeline -u "jdbc:hive2://data-lake-hive:10000/;transportMode=binary" -n hive -p hivepassword --verbose=true -f /tmp/verify_weather.sql 2>&1 | tee /tmp/hive-verify.log
+          echo "Checking verification log..."
+          if grep -q "weather" /tmp/hive-verify.log && grep -q "weather_data" /tmp/hive-verify.log; then
+            echo "Database and table created successfully."
+            echo "Database 'weather' and table 'weather_data' verified."
+            exit 0
+          else
+            echo "Database or table creation failed."
+            cat /tmp/hive-job.log /tmp/hive-verify.log
+            exit 1
+          fi
+        env:
+        - name: HIVE_CONF_DIR
+          value: "/etc/hive/conf"
+        - name: PGPASSWORD
+          value: "hivepassword"
+        securityContext:
+          runAsUser: 0
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: hive-config
+          mountPath: /etc/hive/conf
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "1"
+            memory: "2Gi"
+      volumes:
+      - name: hive-config
+        configMap:
+          name: {{ .Release.Name }}-hive-config
+      - name: tmp
+        emptyDir: {}
+      restartPolicy: Never

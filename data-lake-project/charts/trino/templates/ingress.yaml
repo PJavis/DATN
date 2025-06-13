@@ -1,0 +1,26 @@
+{{- if .Values.trino.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-trino-ingress
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- toYaml .Values.trino.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.trino.ingress.className }}
+  rules:
+  - host: {{ .Values.trino.ingress.hosts.trino }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Release.Name }}-trino-coordinator
+            port:
+              number: {{ .Values.trino.coordinator.port }}
+  {{- if .Values.trino.ingress.tls }}
+  tls:
+    {{- toYaml .Values.trino.ingress.tls | nindent 4 }}
+  {{- end }}
+{{- end }}

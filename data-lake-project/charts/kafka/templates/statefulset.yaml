@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-kafka
+  labels:
+    app: {{ .Release.Name }}-kafka
+spec:
+  serviceName: {{ .Release.Name }}-kafka-headless
+  replicas: {{ .Values.replicaCount }}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-kafka
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-kafka
+    spec:
+      initContainers:
+      - name: fix-permissions
+        image: busybox:latest
+        command: ["sh", "-c", "chown -R 1000:1000 /var/lib/kafka/data"]
+        volumeMounts:
+        - name: kafka-data
+          mountPath: /var/lib/kafka/data
+      containers:
+      - name: kafka
+        image: "confluentinc/cp-kafka:7.7.0"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.service.port }}
+          name: broker
+        - containerPort: {{ .Values.service.controllerPort }}
+          name: controller
+        command:
+        - "/bin/bash"
+        - "-c"
+        - |
+          BROKER_ID=$(echo $KAFKA_POD_NAME | sed 's/.*-//')
+          export KAFKA_BROKER_ID=$BROKER_ID
+          export KAFKA_NODE_ID=$BROKER_ID
+          export KAFKA_ADVERTISED_LISTENERS="PLAINTEXT://{{ .Release.Name }}-kafka-$BROKER_ID.{{ .Release.Name }}-kafka-headless.{{ $.Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}"
+          # Chạy lệnh khởi động Kafka mặc định
+          /etc/confluent/docker/run
+        env:
+        - name: KAFKA_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['statefulset.kubernetes.io/pod-name']
+        - name: KAFKA_LISTENERS
+          value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+        - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+          value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+        - name: KAFKA_INTER_BROKER_LISTENER_NAME
+          value: "PLAINTEXT"
+        - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+          value: "{{- range $i := until (int .Values.replicaCount) }}{{ $i }}@{{ $.Release.Name }}-kafka-{{ $i }}.{{ $.Release.Name }}-kafka-headless.{{ $.Release.Namespace }}.svc.cluster.local:{{ $.Values.service.controllerPort }}{{ if lt $i (sub (int $.Values.replicaCount) 1) }},{{ end }}{{ end }}"
+        - name: KAFKA_PROCESS_ROLES
+          value: "{{ .Values.kafka.processRoles }}"
+        - name: KAFKA_CONTROLLER_LISTENER_NAMES
+          value: "CONTROLLER"
+        - name: CLUSTER_ID
+          value: "8n5kJ9pL2mQ7rT4vX8wY=="
+        volumeMounts:
+        - name: kafka-data
+          mountPath: /var/lib/kafka/data
+  volumeClaimTemplates:
+  - metadata:
+      name: kafka-data
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: {{ .Values.persistence.size }}
+      {{- if .Values.persistence.storageClass }}
+      storageClassName: {{ .Values.persistence.storageClass }}
+      {{- end }}

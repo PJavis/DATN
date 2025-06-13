@@ -1,0 +1,34 @@
+hive:
+  replicaCount: 1
+  image:
+    repository: "custom-hive"
+    tag: "0.0.1"
+    pullPolicy: Never
+  metastore:
+    db:
+      host: "data-lake-postgres"
+      port: 5432
+      name: "hive_metastore"
+      user: "hive"
+      password: "hivepassword"
+  warehouse:
+    type: "s3"
+    endpoint: "data-lake-minio-headless"
+    port: 9000
+    bucket: "hive-warehouse"
+    accessKey: "minio"
+    secretKey: "minio123"
+    region: "us-east-1"
+  service:
+    metastorePort: 9083
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  hosts:
+    hive: hive.local
+  tls: []
+
+minio:
+  replicaCount: 4

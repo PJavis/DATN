@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-trino-coordinator
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: {{ .Release.Name }}-trino-coordinator
+  ports:
+  - name: trino
+    port: {{ .Values.trino.coordinator.port }}
+    targetPort: {{ .Values.trino.coordinator.port }}
+  type: ClusterIP

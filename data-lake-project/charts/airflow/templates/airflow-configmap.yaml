@@ -1,0 +1,181 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-airflow-config
+  namespace: {{ .Release.Namespace }}
+data:
+  upload_to_minio.py: |-
+    from minio import Minio
+    from minio.error import S3Error
+    import logging
+    import os
+    from retry import retry
+    import urllib3
+
+    BUCKET_NAME = "weather-data"
+    DATA_DIR = "/mnt/data"
+    csv_files = [
+        "noaa-daily-weather-data-2015.csv",
+        "noaa-daily-weather-data-2016.csv",
+        "noaa-daily-weather-data-2017.csv",
+        "noaa-daily-weather-data-2018.csv",
+        "noaa-daily-weather-data-2019.csv",
+        "noaa-daily-weather-data-2020.csv",
+    ]
+
+    # Configure logging
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    logger = logging.getLogger(__name__)
+
+    # Configure HTTP client for MinIO
+    http_client = urllib3.PoolManager(
+        timeout=3600.0,
+        maxsize=20,
+        retries=urllib3.Retry(total=15, backoff_factor=2, status_forcelist=[502, 503, 504])
+    )
+
+    # Initialize MinIO client
+    minio_client = Minio(
+        "data-lake-minio-headless:9000",
+        access_key="minio",
+        secret_key="minio123",
+        secure=False,
+        http_client=http_client
+    )
+
+    @retry(S3Error, tries=5, delay=5, backoff=2, logger=logger)
+    def upload_to_minio(csv_file, local_path):
+        minio_client.fput_object(BUCKET_NAME, csv_file, local_path)
+        logger.info(f"Uploaded {csv_file} to MinIO")
+
+    def main():
+        logger.info("Starting Phase 1: Uploading files to MinIO...")
+        try:
+            if not minio_client.bucket_exists(BUCKET_NAME):
+                minio_client.make_bucket(BUCKET_NAME)
+                logger.info(f"Created bucket: {BUCKET_NAME}")
+            else:
+                logger.info(f"Bucket {BUCKET_NAME} already exists")
+        except S3Error as e:
+            logger.error(f"Error creating bucket: {e}")
+            exit(1)
+
+        for csv_file in csv_files:
+            local_path = os.path.join(DATA_DIR, csv_file)
+            if os.path.exists(local_path):
+                try:
+                    minio_client.stat_object(BUCKET_NAME, csv_file)
+                    logger.info(f"File {csv_file} already exists in MinIO, skipping upload")
+                except S3Error:
+                    try:
+                        upload_to_minio(csv_file, local_path)
+                    except Exception as e:
+                        logger.error(f"Failed to upload {csv_file} after retries: {e}")
+            else:
+                logger.warning(f"Local file {csv_file} not found, skipping upload")
+        logger.info("Phase 1 complete: All files uploaded to MinIO.")
+
+    if __name__ == "__main__":
+        main()
+
+  data_lake_pipeline.py: |-
+    from datetime import datetime
+    from airflow import DAG
+    from airflow.operators.bash import BashOperator
+    from airflow.operators.python import PythonOperator
+    from airflow.utils.dates import days_ago
+    from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+    import subprocess
+
+    default_args = {
+        'owner': 'Nguyen-Quoc-Dung',
+        'depends_on_past': False,
+        'email_on_failure': False,
+        'email_on_retry': False,
+        'retries': 3,
+        'retry_delay': 300,
+    }
+
+    ### ===== DAG 1: data_lake_pipeline =====
+
+    def run_upload_to_minio():
+        subprocess.run("python /opt/airflow/dags/upload_to_minio.py", shell=True, check=True)
+
+    def run_weather_processor(year):
+        subprocess.run(
+            f"python /opt/airflow/weather_processor.py --file noaa-daily-weather-data-{year}.csv",
+            shell=True,
+            check=True
+        )
+
+    dag1 = DAG(
+        'data_lake_pipeline',
+        default_args=default_args,
+        description='One-time load and extract weather data',
+        schedule_interval=None,  # chạy tay
+        start_date=days_ago(1),
+        catchup=False,
+    )
+
+    with dag1:
+        load_data = PythonOperator(
+            task_id="load_data",
+            python_callable=run_upload_to_minio,
+        )
+
+        years = range(2015, 2021)
+        extract_data_tasks = [
+            PythonOperator(
+                task_id=f"extract_data_{year}",
+                python_callable=run_weather_processor,
+                op_kwargs={"year": year}
+            ) for year in years
+        ]
+
+        trigger_processing = TriggerDagRunOperator(
+            task_id="trigger_process_and_analyze",
+            trigger_dag_id="process_and_analyze_every_3h",
+            wait_for_completion=False
+        )
+
+        load_data >> extract_data_tasks >> trigger_processing
+
+
+    ### ===== DAG 2: process_and_analyze_every_3h =====
+
+    dag2 = DAG(
+        'process_and_analyze_every_3h',
+        default_args=default_args,
+        description='Run Spark + ANALYZE every 3 hours',
+        schedule_interval="0 */3 * * *",
+        start_date=days_ago(1),
+        catchup=False,
+    )
+
+    with dag2:
+        process_and_analyze_data = BashOperator(
+            task_id='process_and_analyze_data',
+            bash_command="""\
+            /opt/spark/bin/spark-submit \
+                --master spark://data-lake-spark-master:7077 \
+                --deploy-mode client \
+                --conf spark.driver.bindAddress=0.0.0.0 \
+                --conf spark.driver.host=spark-driver-service.default.svc.cluster.local \
+                --conf spark.driver.port=7077 \
+                --conf spark.port.maxRetries=32 \
+                --jars /opt/spark/jars/spark-sql-kafka-0-10_2.12-3.5.5.jar,/opt/spark/jars/kafka-clients-3.4.1.jar,/opt/spark/jars/spark-streaming-kafka-0-10_2.12-3.5.5.jar,/opt/spark/jars/spark-token-provider-kafka-0-10_2.12-3.5.5.jar,/opt/spark/jars/hadoop-aws-3.3.4.jar,/opt/spark/jars/aws-java-sdk-bundle-1.12.761.jar \
+                /opt/spark/work-dir/compact_parquet.py && \
+            curl -X POST http://data-lake-trino-coordinator:8082/v1/statement \
+                -H "X-Trino-User: admin" \
+                -H "X-Trino-Catalog: hive" \
+                -H "X-Trino-Schema: weather" \
+                -H "Content-Type: application/json" \
+                -d '{"query": "ANALYZE weather_data"}'
+            """,
+            env={
+                'AWS_ACCESS_KEY_ID': 'minio',
+                'AWS_SECRET_ACCESS_KEY': 'minio123',
+                'AWS_DEFAULT_REGION': 'us-east-1',
+            },
+        )
+

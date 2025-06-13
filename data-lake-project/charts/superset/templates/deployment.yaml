@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-superset
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-superset
+spec:
+  replicas: {{ .Values.superset.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-superset
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-superset
+    spec:
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+      - name: init-postgres
+        image: postgres:15-alpine
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          until pg_isready -h {{ .Values.superset.postgres.host }} -p {{ .Values.superset.postgres.port }} -U {{ .Values.superset.postgres.admin_user }}; do
+            echo "Waiting for PostgreSQL..."
+            sleep 3
+          done
+          psql "postgresql://{{ .Values.superset.postgres.admin_user }}:{{ .Values.superset.postgres.admin_password }}@{{ .Values.superset.postgres.host }}:{{ .Values.superset.postgres.port }}/postgres" -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ .Values.superset.postgres.db_user }}') THEN CREATE ROLE \"{{ .Values.superset.postgres.db_user }}\" WITH LOGIN PASSWORD '{{ .Values.superset.postgres.db_password }}' CREATEDB; END IF; END \$\$;" || { echo "Failed to create role {{ .Values.superset.postgres.db_user }}"; exit 1; }
+          psql "postgresql://{{ .Values.superset.postgres.admin_user }}:{{ .Values.superset.postgres.admin_password }}@{{ .Values.superset.postgres.host }}:{{ .Values.superset.postgres.port }}/postgres" -c "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.superset.postgres.db_name }}';" | grep -q 1 || psql "postgresql://{{ .Values.superset.postgres.admin_user }}:{{ .Values.superset.postgres.admin_password }}@{{ .Values.superset.postgres.host }}:{{ .Values.superset.postgres.port }}/postgres" -c "CREATE DATABASE \"{{ .Values.superset.postgres.db_name }}\" OWNER \"{{ .Values.superset.postgres.db_user }}\";" || { echo "Failed to create database {{ .Values.superset.postgres.db_name }}"; exit 1; }
+          psql "postgresql://{{ .Values.superset.postgres.admin_user }}:{{ .Values.superset.postgres.admin_password }}@{{ .Values.superset.postgres.host }}:{{ .Values.superset.postgres.port }}/postgres" -c "GRANT ALL PRIVILEGES ON DATABASE \"{{ .Values.superset.postgres.db_name }}\" TO \"{{ .Values.superset.postgres.db_user }}\";"
+          psql "postgresql://{{ .Values.superset.postgres.admin_user }}:{{ .Values.superset.postgres.admin_password }}@{{ .Values.superset.postgres.host }}:{{ .Values.superset.postgres.port }}/{{ .Values.superset.postgres.db_name }}" -c "GRANT ALL ON SCHEMA public TO \"{{ .Values.superset.postgres.db_user }}\";"
+          psql "postgresql://{{ .Values.superset.postgres.admin_user }}:{{ .Values.superset.postgres.admin_password }}@{{ .Values.superset.postgres.host }}:{{ .Values.superset.postgres.port }}/{{ .Values.superset.postgres.db_name }}" -c "ALTER SCHEMA public OWNER TO \"{{ .Values.superset.postgres.db_user }}\";"
+          psql "postgresql://{{ .Values.superset.postgres.admin_user }}:{{ .Values.superset.postgres.admin_password }}@{{ .Values.superset.postgres.host }}:{{ .Values.superset.postgres.port }}/{{ .Values.superset.postgres.db_name }}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"{{ .Values.superset.postgres.db_user }}\";"
+          psql "postgresql://{{ .Values.superset.postgres.admin_user }}:{{ .Values.superset.postgres.admin_password }}@{{ .Values.superset.postgres.host }}:{{ .Values.superset.postgres.port }}/{{ .Values.superset.postgres.db_name }}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"{{ .Values.superset.postgres.db_user }}\";"
+        env:
+        - name: PGPASSWORD
+          value: {{ .Values.superset.postgres.admin_password }}
+      containers:
+      - name: superset
+        image: {{ .Values.superset.image.repository }}:{{ .Values.superset.image.tag }}
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          pip install flask-cors && pip install pillow && pip install sqlalchemy-trino && pip install psycopg2-binary &&
+          superset db upgrade &&
+          superset fab create-admin --username {{ .Values.superset.admin.username }} --firstname {{ .Values.superset.admin.firstname }} --lastname {{ .Values.superset.admin.lastname }} --email {{ .Values.superset.admin.email }} --password {{ .Values.superset.admin.password }} &&
+          superset init &&
+          gunicorn --bind 0.0.0.0:{{ .Values.superset.port }} --workers 2 --timeout 120 "superset.app:create_app()"
+        env:
+        - name: SUPERSET_SECRET_KEY
+          value: "8a7b6c5d4e3f2g1h0i9j8k7l6m5n4o3p"
+        volumeMounts:
+        - name: superset-config
+          mountPath: /app/superset_config.py
+          subPath: superset_config.py
+        ports:
+        - containerPort: {{ .Values.superset.port }}
+        resources:
+          {{- toYaml .Values.superset.resources | nindent 14 }}
+      volumes:
+      - name: superset-config
+        configMap:
+          name: {{ .Release.Name }}-superset-config

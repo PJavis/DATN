@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-airflow-create-admin
+  annotations:
+    "helm.sh/hook": post-install, post-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    spec:
+      containers:
+      - name: airflow-create-admin
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        command: ["airflow"]
+        args:
+        - "users"
+        - "create"
+        - "--username"
+        - "{{ .Values.airflow.admin.username }}"
+        - "--firstname"
+        - "Admin"
+        - "--lastname"
+        - "User"
+        - "--role"
+        - "Admin"
+        - "--email"
+        - "{{ .Values.airflow.admin.email }}"
+        - "--password"
+        - "{{ .Values.airflow.admin.password }}"
+        env:
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: "LocalExecutor"
+        - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: sql_alchemy_conn
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: fernet_key
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: sql_alchemy_conn
+      restartPolicy: OnFailure

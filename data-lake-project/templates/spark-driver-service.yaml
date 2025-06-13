@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-driver-service
+spec:
+  clusterIP: None
+  selector:
+    app: spark-streaming
+  ports:
+  - name: driver
+    port: 7077
+    targetPort: 7077

@@ -1,0 +1,39 @@
+spark:
+  enabled: true
+  master:
+    replicaCount: 1
+    image:
+      repository: "bitnami/spark"
+      tag: "3.5.1"
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+  worker:
+    replicaCount: 3
+    image:
+      repository: "bitnami/spark"
+      tag: "3.5.1"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "3Gi"
+        cpu: "1000m"
+  minio:
+    endpoint: "http://data-lake-minio-headless.default.svc.cluster.local:9000"
+    accessKey: "minio"
+    secretKey: "minio123"
+  hive:
+    metastoreUri: "thrift://data-lake-hive:9083"
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations: {}
+    hosts:
+      spark: spark.local
+    tls: []

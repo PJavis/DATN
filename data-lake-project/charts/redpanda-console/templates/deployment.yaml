@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-redpanda-console
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-redpanda-console
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-redpanda-console
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-redpanda-console
+    spec:
+      containers:
+      - name: redpanda-console
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+          - name: KAFKA_BROKERS
+            value: {{ .Values.console.config.kafka.brokers | join "," }}
+          - name: KAFKA_SASL_ENABLED
+            value: "{{ .Values.console.config.kafka.sasl.enabled }}"
+          - name: KAFKA_TLS_ENABLED
+            value: "{{ .Values.console.config.tls.enabled }}"
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}

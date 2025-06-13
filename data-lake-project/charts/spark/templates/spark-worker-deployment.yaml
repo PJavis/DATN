@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-spark-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-spark-worker
+spec:
+  replicas: {{ .Values.spark.worker.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-spark-worker
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-spark-worker
+    spec:
+      containers:
+      - name: spark-worker
+        # image: "{{ .Values.spark.master.image.repository }}:{{ .Values.spark.master.image.tag }}"
+        image: custom-spark:3.5.1
+        resources:
+          requests:
+            memory: {{ .Values.spark.worker.resources.requests.memory }}
+            cpu: {{ .Values.spark.worker.resources.requests.cpu }}
+          limits:
+            memory: {{ .Values.spark.worker.resources.limits.memory }}
+            cpu: {{ .Values.spark.worker.resources.limits.cpu }}
+        command:
+        - "/opt/bitnami/spark/bin/spark-class"
+        - "org.apache.spark.deploy.worker.Worker"
+        - "spark://{{ .Release.Name }}-spark-master:7077"
+        env:
+        - name: SPARK_MODE
+          value: "worker"
+        - name: SPARK_CONF_DIR
+          value: "/opt/bitnami/spark/conf"
+        volumeMounts:
+        - name: spark-conf
+          mountPath: /opt/bitnami/spark/conf
+      volumes:
+      - name: spark-conf
+        configMap:
+          name: {{ .Release.Name }}-spark-config

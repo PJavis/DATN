@@ -1,0 +1,12 @@
+{{- if and (hasKey .Values.postgresql "persistence") .Values.postgresql.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.postgresql.persistence.size | default "8Gi" }}
+{{- end }}

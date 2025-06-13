@@ -1,0 +1,18 @@
+{{- if .Values.airflowSparkDriverService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.airflowSparkDriverService.name }}
+  namespace: {{ .Values.airflowSparkDriverService.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  clusterIP: None
+  selector:
+    app: {{ .Values.airflowSparkDriverService.selector.app }}
+  ports:
+  - name: driver
+    port: {{ .Values.airflowSparkDriverService.port }}
+    targetPort: {{ .Values.airflowSparkDriverService.port }}
+    protocol: TCP
+{{- end }}

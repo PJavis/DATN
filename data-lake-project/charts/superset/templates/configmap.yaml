@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-superset-config
+  namespace: {{ .Release.Namespace }}
+data:
+  superset_config.py: |
+    import os
+    SECRET_KEY = os.getenv("SUPERSET_SECRET_KEY")
+    SQLALCHEMY_DATABASE_URI = "postgresql://{{ .Values.superset.postgres.db_user }}:{{ .Values.superset.postgres.db_password }}@{{ .Values.superset.postgres.host }}:{{ .Values.superset.postgres.port }}/{{ .Values.superset.postgres.db_name }}"
+    SQLALCHEMY_SILENCE_UBER_WARNING = True
+    ENABLE_CORS = True
+    SQLALCHEMY_CUSTOM_SCHEMA = {
+        "trino": "sqlalchemy_trino",
+    }
+    SQLLAB_DEFAULT_LIMIT = 0
+    ROW_LIMIT = 0
+    SUPERSET_WEBSERVER_TIMEOUT=0
+    SQLLAB_TIMEOUT = 0
+    TIMEOUT = 0
+    LOG_LEVEL = "INFO"
+    WTF_CSRF_TIME_LIMIT = 60 * 60 * 24 * 365
+    SESSION_COOKIE_SAMESITE = None
+    SESSION_COOKIE_SECURE = False
+    SESSION_COOKIE_HTTPONLY = False
+    WTF_CSRF_ENABLED = False
+    WTF_CSRF_EXEMPT_LIST = []
+    RATELIMIT_ENABLED = False
+    CONTENT_SECURITY_POLICY_WARNING = False
+    RATELIMIT_STORAGE_URL = None
+    DISPLAY_MAX_ROWS = 1000000000
+    FILTER_STATE_CACHE_CONFIG = {
+        'CACHE_TYPE': '{{ .Values.superset.supersetConfig.cache.CACHE_TYPE | default "RedisCache" }}',
+        'CACHE_REDIS_HOST': '{{ .Values.superset.supersetConfig.cache.CACHE_REDIS_HOST | default "data-lake-redis" }}',
+        'CACHE_REDIS_PORT': {{ .Values.superset.supersetConfig.cache.CACHE_REDIS_PORT | default 6379 }},
+        'CACHE_REDIS_URL': '{{ .Values.superset.supersetConfig.cache.CACHE_REDIS_URL | default "redis://data-lake-redis:6379/0" }}',
+        'CACHE_KEY_PREFIX': '{{ .Values.superset.supersetConfig.cache.CACHE_KEY_PREFIX | default "superset_cache" }}_filter_state',
+    }
+    EXPLORE_FORM_DATA_CACHE_CONFIG = {
+        'CACHE_TYPE': '{{ .Values.superset.supersetConfig.cache.CACHE_TYPE | default "RedisCache" }}',
+        'CACHE_REDIS_HOST': '{{ .Values.superset.supersetConfig.cache.CACHE_REDIS_HOST | default "data-lake-redis" }}',
+        'CACHE_REDIS_PORT': {{ .Values.superset.supersetConfig.cache.CACHE_REDIS_PORT | default 6379 }},
+        'CACHE_REDIS_URL': '{{ .Values.superset.supersetConfig.cache.CACHE_REDIS_URL | default "redis://data-lake-redis:6379/0" }}',
+        'CACHE_KEY_PREFIX': '{{ .Values.superset.supersetConfig.cache.CACHE_KEY_PREFIX | default "superset_cache" }}_form_data',
+    }

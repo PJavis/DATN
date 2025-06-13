@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-spark-streaming
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-streaming
+  template:
+    metadata:
+      labels:
+        app: spark-streaming
+    spec:
+      restartPolicy: Always
+      containers:
+      - name: spark-streaming
+        image: custom-spark:3.5.1
+        command: ["/opt/bitnami/spark/bin/spark-submit"]
+        args:
+        - "--master"
+        - "spark://data-lake-spark-master:7077"
+        - "--deploy-mode"
+        - "client"
+        - "--conf"
+        - "spark.driver.bindAddress=0.0.0.0"
+        - "--conf"
+        - "spark.driver.host=spark-driver-service.default.svc.cluster.local"
+        - "--conf"
+        - "spark.driver.port=7077"
+        - "--conf"
+        - "spark.port.maxRetries=32"
+        - "--jars"
+        - "/opt/spark/jars/spark-sql-kafka-0-10_2.12-3.5.5.jar,/opt/spark/jars/kafka-clients-3.4.1.jar,spark-streaming-kafka-0-10_2.12-3.5.5.jar,/opt/spark/jars/spark-token-provider-kafka-0-10_2.12-3.5.5.jar,/opt/spark/jars/hadoop-aws-3.3.4.jar,/opt/spark/jars/aws-java-sdk-bundle-1.12.761.jar"
+        - "/opt/spark/work-dir/spark_streaming.py"
+        env:
+        - name: AWS_REGION
+          value: us-east-1
+        - name: AWS_DEFAULT_REGION
+          value: us-east-1
+        volumeMounts:
+        - name: spark-scripts
+          mountPath: /opt/spark/work-dir
+          readOnly: true
+        - name: hive-config
+          mountPath: /opt/spark/conf
+          readOnly: true
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "2Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+      volumes:
+      - name: spark-scripts
+        configMap:
+          name: {{ .Release.Name }}-spark-config
+          items:
+          - key: spark_streaming.py
+            path: spark_streaming.py
+      - name: hive-config
+        configMap:
+          name: data-lake-hive-config

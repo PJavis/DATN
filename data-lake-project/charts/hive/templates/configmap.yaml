@@ -1,0 +1,182 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-lake-hive-config
+data:
+  hive-site.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <configuration>
+      <property>
+        <name>javax.jdo.option.ConnectionURL</name>
+        <value>jdbc:postgresql://data-lake-postgres:5432/hive_metastore</value>
+      </property>
+      <property>
+        <name>javax.jdo.option.ConnectionDriverName</name>
+        <value>org.postgresql.Driver</value>
+      </property>
+      <property>
+        <name>javax.jdo.option.ConnectionUserName</name>
+        <value>hive</value>
+      </property>
+      <property>
+        <name>javax.jdo.option.ConnectionPassword</name>
+        <value>hivepassword</value>
+      </property>
+      <property>
+        <name>datanucleus.connectionPoolingType</name>
+        <value>HikariCP</value>
+      </property>
+      <property>
+        <name>hive.metastore.uris</name>
+        <value>thrift://data-lake-hive:9083</value>
+      </property>
+      <property>
+        <name>hive.metastore.bind.host</name>
+        <value>0.0.0.0</value>
+      </property>
+      <property>
+        <name>hive.metastore.warehouse.dir</name>
+        <value>s3a://hive-warehouse/</value>
+      </property>
+      <property>
+        <name>fs.s3a.endpoint</name>
+        <value>http://data-lake-minio-headless:9000</value>
+      </property>
+      <property>
+        <name>fs.s3a.access.key</name>
+        <value>minio</value>
+      </property>
+      <property>
+        <name>fs.s3a.secret.key</name>
+        <value>minio123</value>
+      </property>
+      <property>
+        <name>fs.s3a.path.style.access</name>
+        <value>true</value>
+      </property>
+      <property>
+        <name>fs.s3a.impl</name>
+        <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+      </property>
+      <property>
+        <name>fs.s3a.region</name>
+        <value>us-east-1</value>
+      </property>
+      <property>
+        <name>hive.metastore.client.socket.timeout</name>
+        <value>6000</value>
+      </property>
+      <property>
+        <name>hive.metastore.client.connect.retry.delay</name>
+        <value>5s</value>
+      </property>
+      <property>
+        <name>hive.metastore.client.connection.timeout</name>
+        <value>1200s</value>
+      </property>
+      <property>
+        <name>hive.metastore.sasl.enabled</name>
+        <value>false</value>
+      </property>
+      <property>
+        <name>hive.metastore.dbaccess.ssl</name>
+        <value>false</value>
+      </property>
+      <property>
+        <name>datanucleus.connectionPool.maxPoolSize</name>
+        <value>10</value>
+      </property>
+      <property>
+        <name>datanucleus.connectionPool.minPoolSize</name>
+        <value>2</value>
+      </property>
+      <property>
+        <name>hive.metastore.event.db.notification.api.auth</name>
+        <value>false</value>
+      </property>
+      <property>
+        <name>hive.metastore.thrift.framed.transport.enabled</name>
+        <value>false</value>
+      </property>
+      <property>
+        <name>hive.metastore.server.max.threads</name>
+        <value>100</value>
+      </property>
+      <property>
+        <name>hive.metastore.server.min.threads</name>
+        <value>10</value>
+      </property>
+      <property>
+        <name>datanucleus.schema.autoCreateAll</name>
+        <value>true</value>
+      </property>
+      <property>
+        <name>datanucleus.schema.autoCreateTables</name>
+        <value>true</value>
+      </property>
+      <property>
+        <name>datanucleus.schema.validateTables</name>
+        <value>true</value>
+      </property>
+      <property>
+        <name>hive.server2.thrift.bind.host</name>
+        <value>0.0.0.0</value>
+      </property>
+      <property>
+        <name>hive.server2.thrift.port</name>
+        <value>10000</value>
+      </property>
+      <property>
+        <name>hive.server2.authentication</name>
+        <value>NONE</value>
+      </property>
+      <property>
+        <name>hive.log.level</name>
+        <value>DEBUG</value>
+      </property>
+      <property>
+        <name>hive.server2.transport.mode</name>
+        <value>binary</value>
+      </property>
+      <property>
+        <name>hive.log.file</name>
+        <value>hive-hs2.log</value>
+      </property>
+      <property>
+        <name>hive.pid.dir</name>
+        <value>/tmp</value>
+      </property>
+    </configuration>
+  hive-log4j2.properties: |
+    status = DEBUG
+    name = HiveLog4j2
+    packages = org.apache.logging.log4j.core
+    appender.console.type = Console
+    appender.console.name = console
+    appender.console.target = SYSTEM_OUT
+    appender.console.layout.type = PatternLayout
+    appender.console.layout.pattern = %d{yyyy-MM-dd HH:mm:ss} %p %c{1}: %m%n
+    appender.metastore_file.type = File
+    appender.metastore_file.name = metastore_file
+    appender.metastore_file.fileName = /tmp/hive-metastore.log
+    appender.metastore_file.layout.type = PatternLayout
+    appender.metastore_file.layout.pattern = %d{yyyy-MM-dd HH:mm:ss} %p %c{1}: %m%n
+    appender.hs2_file.type = File
+    appender.hs2_file.name = hs2_file
+    appender.hs2_file.fileName = /tmp/hive-hs2.log
+    appender.hs2_file.layout.type = PatternLayout
+    appender.hs2_file.layout.pattern = %d{yyyy-MM-dd HH:mm:ss} %p %c{1}: %m%n
+    rootLogger.level = DEBUG
+    rootLogger.appenderRef.console.ref = console
+    rootLogger.appenderRef.metastore_file.ref = metastore_file
+    rootLogger.appenderRef.hs2_file.ref = hs2_file
+    logger.metastore.name = org.apache.hadoop.hive.metastore
+    logger.metastore.level = DEBUG
+    logger.metastore.additivity = false
+    logger.metastore.appenderRef.console.ref = console
+    logger.metastore.appenderRef.metastore_file.ref = metastore_file
+    logger.hs2.name = org.apache.hive.service.server
+    logger.hs2.level = DEBUG
+    logger.hs2.additivity = false
+    logger.hs2.appenderRef.console.ref = console
+    logger.hs2.appenderRef.hs2_file.ref = hs2_file

@@ -1,0 +1,199 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-airflow
+  namespace: default
+  labels:
+    app: {{ .Release.Name }}-airflow
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    meta.helm.sh/release-name: data-lake
+    meta.helm.sh/release-namespace: default
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-airflow
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-airflow
+    spec:
+      serviceAccountName: airflow-sa
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:15
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              until pg_isready -h {{ .Release.Name }}-postgres -p 5432 -U airflow; do
+                echo "Waiting for PostgreSQL..."
+                sleep 3
+              done
+          env:
+            - name: PGPASSWORD
+              value: "airflow"
+            - name: PGHOST
+              value: "{{ .Values.database.host }}"
+            - name: PGPORT
+              value: "{{ .Values.database.port }}"
+            - name: PGUSER
+              value: "{{ .Values.database.user }}"
+        - name: airflow-init-db
+          image: custom-airflow:2.7.1
+          command: ["airflow"]
+          args: ["db", "init"]
+          env:
+            - name: AIRFLOW__CORE__EXECUTOR
+              value: "LocalExecutor"
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: sql_alchemy_conn
+            - name: AIRFLOW__CORE__FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: fernet_key
+          volumeMounts:
+            - name: airflow-dags
+              mountPath: /opt/airflow/dags
+        - name: copy-dags
+          image: busybox
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Copying DAG files to /opt/airflow/dags..."
+              cp /config/*.py /opt/airflow/dags/
+              chown -R 50000:50000 /opt/airflow/dags
+              chmod -R 755 /opt/airflow/dags
+              ls -l /opt/airflow/dags
+          volumeMounts:
+            - name: dag-config
+              mountPath: /config
+            - name: airflow-dags
+              mountPath: /opt/airflow/dags
+      containers:
+        - name: webserver
+          image: custom-airflow:2.7.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Starting Airflow Webserver..."
+              ls -l /opt/airflow/dags
+              airflow webserver
+          ports:
+            - containerPort: 8080
+          env:
+            - name: AIRFLOW__WEBSERVER__SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: secret_key
+            - name: AIRFLOW__CORE__EXECUTOR
+              value: "LocalExecutor"
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: sql_alchemy_conn
+            - name: AIRFLOW__CORE__FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: fernet_key
+            - name: AIRFLOW__LOGGING__LOGGING_LEVEL
+              value: "INFO"
+            - name: AIRFLOW__CORE__DAGS_FOLDER
+              value: "/opt/airflow/dags"
+          volumeMounts:
+            - name: airflow-dags
+              mountPath: /opt/airflow/dags
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+        - name: scheduler
+          image: custom-airflow:2.7.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Starting Airflow Scheduler..."
+              ls -l /opt/airflow/dags
+              ls -l /mnt/data
+              airflow scheduler
+          env:
+            - name: AIRFLOW__WEBSERVER__SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: secret_key
+            - name: AIRFLOW__CORE__EXECUTOR
+              value: "LocalExecutor"
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: sql_alchemy_conn
+            - name: AIRFLOW__CORE__FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: fernet_key
+            - name: AIRFLOW__LOGGING__LOGGING_LEVEL
+              value: "INFO"
+            - name: AIRFLOW__CORE__DAGS_FOLDER
+              value: "/opt/airflow/dags"
+            - name: AWS_ACCESS_KEY_ID
+              value: "minio"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "minio123"
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+          volumeMounts:
+            - name: airflow-dags
+              mountPath: /opt/airflow/dags
+            - name: data-mount
+              mountPath: /mnt/data
+            - name: spark-scripts
+              mountPath: /opt/spark/work-dir
+            - name: hive-config
+              mountPath: /opt/spark/conf
+              readOnly: true
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+      volumes:
+        - name: hive-config
+          configMap:
+            name: data-lake-hive-config
+        - name: spark-scripts
+          configMap:
+            name: {{ .Release.Name }}-spark-config
+            items:
+            - key: compact_parquet.py
+              path: compact_parquet.py
+        - name: airflow-dags
+          emptyDir: {}
+        - name: dag-config
+          configMap:
+            name: {{ .Release.Name }}-airflow-config
+        - name: data-mount
+          persistentVolumeClaim:
+            claimName: data-pvc
+      securityContext:
+        fsGroup: 50000
+        runAsUser: 50000

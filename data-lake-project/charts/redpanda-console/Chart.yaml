@@ -1,0 +1,4 @@
+apiVersion: v2
+name: redpanda-console
+description: A Helm chart for Redpanda Console to monitor Kafka
+version: 0.1.0

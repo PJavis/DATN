@@ -1,0 +1,50 @@
+superset:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: "apache/superset"
+    tag: "2.1.0"
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+  port: 8088
+  admin:
+    username: "admin"
+    password: "admin123"
+    firstname: "Admin"
+    lastname: "User"
+    email: "admin@example.com"
+  trino:
+    host: "data-lake-trino-coordinator"
+    port: 8082
+    username: "admin"
+  postgres:
+    host: "data-lake-postgres"
+    port: 5432
+    admin_user: "airflow"
+    admin_password: "airflow"
+    db_user: "superset_user"
+    db_password: "superset_password"
+    db_name: "superset"
+  redis:
+    enabled: true
+    host: "{{ .Release.Name }}-redis"
+    port: 6379
+    cacheKeyPrefix: "superset_cache"
+  supersetConfig:
+    cache:
+      CACHE_TYPE: "RedisCache"
+      CACHE_REDIS_HOST: "{{ .Release.Name }}-redis"
+      CACHE_REDIS_PORT: 6379
+      CACHE_REDIS_URL: "redis://{{ .Release.Name }}-redis:6379/0"
+      CACHE_KEY_PREFIX: "superset_cache"
+  ingress:
+    enabled: true
+    className: "nginx"
+    hosts:
+      superset: "superset.local"
+    tls: []

@@ -1,0 +1,21 @@
+{{- if .Values.persistence.enabled }}
+{{- range $i := until (int .Values.replicaCount) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kafka-data-{{ $.Release.Name }}-kafka-{{ $i }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: kafka
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $.Values.persistence.size }}
+  {{- if $.Values.persistence.storageClass }}
+  storageClassName: {{ $.Values.persistence.storageClass }}
+  {{- end }}
+{{- end }}
+{{- end }}

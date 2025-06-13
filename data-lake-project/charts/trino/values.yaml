@@ -1,0 +1,94 @@
+trino:
+  enabled: true
+  coordinator:
+    replicaCount: 1
+    image:
+      repository: "custom-trino"
+      tag: "0.0.1"
+      pullPolicy: Never
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1"
+      limits:
+        memory: "4Gi"
+        cpu: "2"
+    nodeEnvironment: "datalake"
+    port: 8082
+    volumeMounts:
+      - name: trino-config
+        mountPath: /etc/trino
+      - name: trino-catalog
+        mountPath: /etc/trino/catalog
+        subPath: catalog
+    volumes:
+      - name: trino-config
+        configMap:
+          name: "{{ .Release.Name }}-trino-coordinator-config"
+      - name: trino-catalog
+        configMap:
+          name: "{{ .Release.Name }}-trino-coordinator-config"
+          items:
+            - key: hive.properties
+              path: hive.properties
+  worker:
+    replicaCount: 2
+    image:
+      repository: "custom-trino"
+      tag: "0.0.1"
+      pullPolicy: Never
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1"
+      limits:
+        memory: "4Gi"
+        cpu: "2"
+    nodeEnvironment: "datalake"
+    volumeMounts:
+      - name: trino-config
+        mountPath: /etc/trino
+      - name: trino-catalog
+        mountPath: /etc/trino/catalog
+        subPath: catalog
+    volumes:
+      - name: trino-config
+        configMap:
+          name: "{{ .Release.Name }}-trino-worker-config"
+      - name: trino-catalog
+        configMap:
+          name: "{{ .Release.Name }}-trino-worker-config"
+          items:
+            - key: hive.properties
+              path: hive.properties
+  minio:
+    endpoint: "http://data-lake-minio-headless.default.svc.cluster.local:9000"
+    accessKey: "minio"
+    secretKey: "minio123"
+  hive:
+    metastoreUri: "thrift://data-lake-hive:9083"
+  additionalConfigProperties:
+    - key: http-server.http.port
+      value: "8082"
+    - key: discovery.uri
+      value: "http://data-lake-trino-coordinator:8082"
+    - key: discovery.http-client.connect-timeout
+      value: "10s"
+    - key: discovery.http-client.request-timeout
+      value: "10s"
+  additionalCatalogs:
+    hive: |
+      connector.name=hive
+      hive.metastore.uri=thrift://data-lake-hive:9083
+      hive.s3.endpoint=http://data-lake-minio-headless.default.svc.cluster.local:9000
+      hive.s3.access-key=minio
+      hive.s3.secret-key=minio123
+      hive.s3.path-style-access=true
+      hive.s3.ssl.enabled=false
+      hive.non-managed-table-writes-enabled=true
+  ingress:
+    enabled: true
+    className: "nginx"
+    hosts:
+      trino: "trino.local"
+    tls: []

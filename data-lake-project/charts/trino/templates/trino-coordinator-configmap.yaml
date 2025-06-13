@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-trino-coordinator-config
+  namespace: {{ .Release.Namespace }}
+data:
+  config.properties: |
+    coordinator=true
+    node-scheduler.include-coordinator=false
+    http-server.http.port={{ .Values.trino.coordinator.port }}
+    discovery.uri=http://{{ .Release.Name }}-trino-coordinator:{{ .Values.trino.coordinator.port }}
+  jvm.config: |
+    -server
+    -Xmx2G
+    -XX:+UseG1GC
+  hive.properties: |
+    connector.name=hive
+    hive.metastore.uri=thrift://data-lake-hive:9083
+    hive.non-managed-table-writes-enabled=true
+    fs.native-s3.enabled=true
+    s3.aws-access-key=minio
+    s3.aws-secret-key=minio123
+    s3.endpoint=http://data-lake-minio-headless.default.svc.cluster.local:9000
+    s3.path-style-access=true
+    s3.region=us-east-1
+  node.properties: |
+    node.environment={{ .Values.trino.coordinator.nodeEnvironment }}
+    node.data-dir=/data/trino

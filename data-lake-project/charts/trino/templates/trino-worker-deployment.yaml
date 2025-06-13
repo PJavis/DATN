@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-trino-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-trino-worker
+spec:
+  replicas: {{ .Values.trino.worker.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-trino-worker
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-trino-worker
+    spec:
+      containers:
+      - name: trino-worker
+        image: "{{ .Values.trino.worker.image.repository }}:{{ .Values.trino.worker.image.tag }}"
+        resources:
+          requests:
+            memory: {{ .Values.trino.worker.resources.requests.memory }}
+            cpu: {{ .Values.trino.worker.resources.requests.cpu }}
+          limits:
+            memory: {{ .Values.trino.worker.resources.limits.memory }}
+            cpu: {{ .Values.trino.worker.resources.limits.cpu }}
+        env:
+        - name: TRINO_CONFIG
+          value: "/etc/trino"
+        volumeMounts:
+        - name: trino-config
+          mountPath: /etc/trino
+        - name: trino-catalog
+          mountPath: /etc/trino/catalog
+      volumes:
+      - name: trino-config
+        configMap:
+          name: {{ .Release.Name }}-trino-worker-config
+      - name: trino-catalog
+        configMap:
+          name: {{ .Release.Name }}-trino-worker-config
+          items:
+          - key: hive.properties
+            path: hive.properties

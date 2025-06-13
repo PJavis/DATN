@@ -1,0 +1,13 @@
+postgresql:
+  enabled: true
+  auth:
+    username: airflow
+    password: airflow
+    database: airflow
+  primary:
+    service:
+      ports:
+        postgresql: 5432
+  persistence:
+    enabled: true
+    size: 8Gi

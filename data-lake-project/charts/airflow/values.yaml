@@ -1,0 +1,21 @@
+replicaCount: 1
+image:
+  repository: "custom-airflow"
+  tag: "2.7.1"
+  pullPolicy: IfNotPresent
+airflow:
+  admin:
+    username: "human"
+    email: "admin123@example.com"
+    password: "human"
+  config:
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://airflow:airflow@{{ .Release.Name }}-postgres:5432/airflow"
+    AIRFLOW__CORE__EXECUTOR: "KubernetesExecutor"
+    AIRFLOW__KUBERNETES__NAMESPACE: "default"
+    AIRFLOW__KUBERNETES__WORKER_CONTAINER_IMAGE: "apache/airflow:2.5.1-python3.8"
+  fernetKey: "Q_vkSOwDoACqP1uH8H926X8kRuEMs8IgDRXrURd1eP4="
+ingress:
+  enabled: true
+  className: "nginx"
+  hosts:
+    airflow: airflow.local

@@ -1,0 +1,86 @@
+FROM bitnami/spark:3.5.5
+USER root
+
+# Cài đặt công cụ cần thiết
+RUN apt-get update && \
+    apt-get install -y wget curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Cài đặt thrift
+RUN pip install thrift==0.16.0
+
+# Tạo thư mục chứa JARs
+RUN mkdir -p /opt/spark/jars
+
+# Tải các JAR cần thiết
+# PostgreSQL
+RUN wget https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.3/postgresql-42.7.3.jar -P /opt/spark/jars/
+
+# Hadoop AWS và AWS SDK
+RUN wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.761/aws-java-sdk-bundle-1.12.761.jar -P /opt/spark/jars/
+
+# Hive 3.1.3 JARs
+RUN wget https://archive.apache.org/dist/hive/hive-3.1.3/apache-hive-3.1.3-bin.tar.gz && \
+    tar -xzf apache-hive-3.1.3-bin.tar.gz -C /tmp && \
+    cp /tmp/apache-hive-3.1.3-bin/lib/*.jar /opt/spark/jars/ && \
+    rm -rf apache-hive-3.1.3-bin.tar.gz /tmp/apache-hive-3.1.3-bin
+
+# Hadoop JARs
+RUN wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-common/3.3.6/hadoop-common-3.3.6.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-hdfs/3.3.6/hadoop-hdfs-3.3.6.jar -P /opt/spark/jars/
+
+# Commons Logging
+RUN wget https://repo1.maven.org/maven2/commons-logging/commons-logging/1.3.4/commons-logging-1.3.4.jar -P /opt/spark/jars/
+
+# SLF4J và Log4j
+RUN wget https://repo1.maven.org/maven2/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/log4j/log4j/1.2.17/log4j-1.2.17.jar -P /opt/spark/jars/
+
+# HTTP dependencies
+RUN wget https://repo1.maven.org/maven2/org/apache/httpcomponents/httpcore/4.4.16/httpcore-4.4.16.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/org/apache/httpcomponents/httpclient/4.5.14/httpclient-4.5.14.jar -P /opt/spark/jars/
+
+# Metrics
+RUN wget https://repo1.maven.org/maven2/io/dropwizard/metrics/metrics-core/4.2.26/metrics-core-4.2.26.jar -P /opt/spark/jars/
+
+# Commons Codec
+RUN wget https://repo1.maven.org/maven2/commons-codec/commons-codec/1.17.1/commons-codec-1.17.1.jar -P /opt/spark/jars/
+
+# Servlet và Joda-Time
+RUN wget https://repo1.maven.org/maven2/javax/servlet/javax.servlet-api/4.0.1/javax.servlet-api-4.0.1.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/joda-time/joda-time/2.12.7/joda-time-2.12.7.jar -P /opt/spark/jars/
+
+# Calcite
+RUN wget https://repo1.maven.org/maven2/org/apache/calcite/calcite-core/1.26.0/calcite-core-1.26.0.jar -P /opt/spark/jars/
+
+# DataNucleus
+RUN wget https://repo1.maven.org/maven2/org/datanucleus/datanucleus-rdbms/5.2.4/datanucleus-rdbms-5.2.4.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/org/datanucleus/datanucleus-core/5.2.4/datanucleus-core-5.2.4.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/org/datanucleus/datanucleus-api-jdo/5.2.4/datanucleus-api-jdo-5.2.4.jar -P /opt/spark/jars/
+
+# HikariCP
+RUN wget https://repo1.maven.org/maven2/com/zaxxer/HikariCP/5.0.1/HikariCP-5.0.1.jar -P /opt/spark/jars/
+
+# Kafka và phụ thuộc
+RUN wget https://repo1.maven.org/maven2/org/apache/spark/spark-sql-kafka-0-10_2.12/3.5.5/spark-sql-kafka-0-10_2.12-3.5.5.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/org/apache/spark/spark-streaming-kafka-0-10_2.12/3.5.5/spark-streaming-kafka-0-10_2.12-3.5.5.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/org/apache/spark/spark-token-provider-kafka-0-10_2.12/3.5.5/spark-token-provider-kafka-0-10_2.12-3.5.5.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.4.1/kafka-clients-3.4.1.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/com/google/code/findbugs/jsr305/3.0.0/jsr305-3.0.0.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/org/lz4/lz4-java/1.8.0/lz4-java-1.8.0.jar -P /opt/spark/jars/ && \
+    wget https://repo1.maven.org/maven2/org/xerial/snappy/snappy-java/1.1.10.5/snappy-java-1.1.10.5.jar -P /opt/spark/jars/
+
+# Xóa JAR không cần thiết, đảm bảo giữ lại các JAR cần thiết
+RUN find /opt/spark/jars -name 'hive-*.jar' ! -name 'hive-*-3.1.3.jar' -delete && \
+    find /opt/spark/jars -name 'datanucleus-*.jar' ! -name 'datanucleus-*-5.2.4.jar' -delete && \
+    find /opt/spark/jars -name 'HikariCP-*.jar' ! -name 'HikariCP-5.0.1.jar' -delete && \
+    rm -f /opt/spark/jars/derby-*.jar
+
+# Spark working dir
+RUN mkdir -p /opt/spark/work-dir
+
+# Environment setup
+ENV SPARK_USER=root
+ENV USER=root

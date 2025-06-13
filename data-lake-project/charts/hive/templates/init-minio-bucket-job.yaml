@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-hive-init-minio-bucket
+  annotations:
+    "helm.sh/hook": post-install, post-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: wait-for-minio
+        image: bitnami/kubectl:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          until [ $(kubectl get pods -l app={{ .Release.Name }}-minio -n {{ .Release.Namespace }} -o jsonpath='{.items[*].status.phase}' | grep -o Running | wc -l) -eq {{ .Values.minio.replicaCount }} ]; do
+            echo "Waiting for all MinIO nodes to be Running...";
+            sleep 2;
+          done
+          echo "MinIO cluster is stable and ready!"
+      containers:
+      - name: init-minio-bucket
+        image: minio/mc:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          mc alias set myminio http://{{ .Release.Name }}-minio-0.{{ .Release.Name }}-minio-headless.{{ .Release.Namespace }}.svc.cluster.local:9000 $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+          mc ls myminio/{{ .Values.hive.warehouse.bucket }} || mc mb myminio/{{ .Values.hive.warehouse.bucket }}
+        env:
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-secrets
+              key: accesskey
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-secrets
+              key: secretkey
+      restartPolicy: OnFailure

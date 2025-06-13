@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-superset
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: {{ .Release.Name }}-superset
+  ports:
+  - name: superset
+    port: {{ .Values.superset.port }}
+    targetPort: {{ .Values.superset.port }}
+  type: ClusterIP

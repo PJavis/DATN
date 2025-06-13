@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-spark-master
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-spark-master
+spec:
+  replicas: {{ .Values.spark.master.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-spark-master
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-spark-master
+    spec:
+      containers:
+      - name: spark-master
+        # image: "{{ .Values.spark.master.image.repository }}:{{ .Values.spark.master.image.tag }}"
+        image: custom-spark:3.5.1
+        ports:
+        - containerPort: 7077
+          name: spark
+        - containerPort: 8081
+          name: webui
+        resources:
+          requests:
+            memory: {{ .Values.spark.master.resources.requests.memory }}
+            cpu: {{ .Values.spark.master.resources.requests.cpu }}
+          limits:
+            memory: {{ .Values.spark.master.resources.limits.memory }}
+            cpu: {{ .Values.spark.master.resources.limits.cpu }}
+        command:
+        - "/opt/bitnami/spark/bin/spark-class"
+        - "org.apache.spark.deploy.master.Master"
+        - "--host"
+        - "0.0.0.0"
+        - "--port"
+        - "7077"
+        env:
+        - name: SPARK_MODE
+          value: "master"
+        - name: SPARK_MASTER_HOST
+          value: "{{ .Release.Name }}-spark-master"
+        - name: SPARK_MASTER_PORT
+          value: "7077"
+        - name: SPARK_CONF_DIR
+          value: "/opt/bitnami/spark/conf"
+        - name: SPARK_PORT_MAX_RETRIES
+          value: "50"
+        volumeMounts:
+        - name: spark-conf
+          mountPath: /opt/bitnami/spark/conf
+          readOnly: true
+      volumes:
+      - name: spark-conf
+        configMap:
+          name: {{ .Release.Name }}-spark-config
+          items:
+          - key: spark-defaults.conf
+            path: spark-defaults.conf

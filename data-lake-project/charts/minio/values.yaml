@@ -1,0 +1,35 @@
+replicaCount: 4
+
+image:
+  repository: "minio/minio"
+  tag: "latest"
+
+minio:
+  accessKey: "minio"
+  secretKey: "minio123"
+
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "500m"
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+
+service:
+  type: ClusterIP
+  apiPort: 9000
+  consolePort: 9001
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: ""
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  hosts:
+    minio: minio.local
+  tls: []

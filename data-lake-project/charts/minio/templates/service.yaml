@@ -1,0 +1,35 @@
+# Headless Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-minio-headless
+  labels:
+    app: {{ .Release.Name }}-minio
+spec:
+  clusterIP: None
+  ports:
+  - port: {{ .Values.service.apiPort }}
+    name: api
+  - port: {{ .Values.service.consolePort }}
+    name: console
+  selector:
+    app: {{ .Release.Name }}-minio
+---
+# Regular Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-minio
+  labels:
+    app: {{ .Release.Name }}-minio
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+  - port: {{ .Values.service.apiPort }}
+    targetPort: {{ .Values.service.apiPort }}
+    name: api
+  - port: {{ .Values.service.consolePort }}
+    targetPort: {{ .Values.service.consolePort }}
+    name: console
+  selector:
+    app: {{ .Release.Name }}-minio

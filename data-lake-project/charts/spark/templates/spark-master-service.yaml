@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-spark-master
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: {{ .Release.Name }}-spark-master
+  ports:
+  - name: spark
+    port: 7077
+    targetPort: 7077
+  - name: webui
+    port: 8081
+    targetPort: 8081
+  type: ClusterIP

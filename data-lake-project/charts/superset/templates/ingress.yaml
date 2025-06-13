@@ -1,0 +1,24 @@
+{{- if .Values.superset.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-superset-ingress
+  namespace: {{ .Release.Namespace }}
+spec:
+  ingressClassName: {{ .Values.superset.ingress.className }}
+  rules:
+  - host: {{ .Values.superset.ingress.hosts.superset }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Release.Name }}-superset
+            port:
+              number: {{ .Values.superset.port }}
+{{- if .Values.superset.ingress.tls }}
+tls:
+  {{- toYaml .Values.superset.ingress.tls | nindent 4 }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,23 @@
+replicaCount: 3
+image:
+  repository: confluentinc/cp-kafka
+  tag: 7.7.0
+  pullPolicy: IfNotPresent
+service:
+  port: 9092
+  controllerPort: 9093
+kafka:
+  kraft: "true"
+  processRoles: "broker,controller"
+  listeners: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+persistence:
+  size: 10Gi
+  storageClass: standard
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  hosts:
+    kafka: kafka.local
+  tls: []

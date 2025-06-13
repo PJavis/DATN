@@ -1,0 +1,33 @@
+dependencies:
+- name: redis
+  repository: file://charts/redis
+  version: 0.1.0
+- name: minio
+  repository: file://charts/minio
+  version: 0.1.0
+- name: hive
+  repository: file://charts/hive
+  version: 0.1.0
+- name: trino
+  repository: file://charts/trino
+  version: 0.1.0
+- name: superset
+  repository: file://charts/superset
+  version: 0.1.0
+- name: spark
+  repository: file://charts/spark
+  version: 0.1.0
+- name: kafka
+  repository: file://charts/kafka
+  version: 0.1.0
+- name: airflow
+  repository: file://charts/airflow
+  version: 0.1.0
+- name: postgres
+  repository: file://charts/postgres
+  version: 0.1.0
+- name: redpanda-console
+  repository: file://charts/redpanda-console
+  version: 0.1.0
+digest: sha256:1384de922858028a247333b1e4c42e7a4943f4c63036da80efda40c52cc20dfe
+generated: "2025-06-09T09:43:05.405558152+07:00"

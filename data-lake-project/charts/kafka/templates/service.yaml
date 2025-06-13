@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-kafka-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-kafka
+spec:
+  clusterIP: None
+  ports:
+  - name: broker
+    port: {{ .Values.service.port }}
+    targetPort: {{ .Values.service.port }}
+    protocol: TCP
+  - name: controller
+    port: {{ .Values.service.controllerPort }}
+    targetPort: {{ .Values.service.controllerPort }}
+    protocol: TCP
+  selector:
+    app: {{ .Release.Name }}-kafka
+  publishNotReadyAddresses: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-kafka
+spec:
+  ports:
+  - name: broker
+    port: {{ .Values.service.port }}
+    targetPort: {{ .Values.service.port }}
+    protocol: TCP
+  selector:
+    app: {{ .Release.Name }}-kafka
+  type: ClusterIP

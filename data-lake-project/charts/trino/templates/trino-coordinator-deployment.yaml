@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-trino-coordinator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-trino-coordinator
+spec:
+  replicas: {{ .Values.trino.coordinator.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-trino-coordinator
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-trino-coordinator
+    spec:
+      containers:
+      - name: trino-coordinator
+        image: "{{ .Values.trino.coordinator.image.repository }}:{{ .Values.trino.coordinator.image.tag }}"
+        ports:
+        - containerPort: {{ .Values.trino.coordinator.port }}
+          name: trino
+        resources:
+          requests:
+            memory: {{ .Values.trino.coordinator.resources.requests.memory }}
+            cpu: {{ .Values.trino.coordinator.resources.requests.cpu }}
+          limits:
+            memory: {{ .Values.trino.coordinator.resources.limits.memory }}
+            cpu: {{ .Values.trino.coordinator.resources.limits.cpu }}
+        env:
+        - name: TRINO_CONFIG
+          value: "/etc/trino"
+        volumeMounts:
+        - name: trino-config
+          mountPath: /etc/trino/
+        - name: trino-catalog
+          mountPath: /etc/trino/catalog
+      volumes:
+      - name: trino-config
+        configMap:
+          name: {{ .Release.Name }}-trino-coordinator-config
+      - name: trino-catalog
+        configMap:
+          name: {{ .Release.Name }}-trino-coordinator-config
+          items:
+          - key: hive.properties
+            path: hive.properties

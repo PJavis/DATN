@@ -1,0 +1,31 @@
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    minio: minio.local
+    hive: hive.local
+    trino: trino.local
+    superset: superset.local
+    spark: spark.local
+    kafka: kafka.local
+    airflow: airflow.local
+  tls: []
+
+airflow:
+  database:
+    host: "{{ .Release.Name }}-postgres"
+    port: 5432
+    name: airflow
+    user: airflow
+
+airflowSparkDriverService:
+  enabled: true
+  name: airflow-spark-driver-service
+  namespace: default
+  port: 7077
+  selector:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: scheduler

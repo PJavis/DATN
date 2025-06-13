@@ -1,0 +1,31 @@
+FROM apache/hive:4.0.1
+
+USER root
+# Cài đặt các gói cần thiết trong build time
+RUN apt-get update && apt-get install -y \
+    wget \
+    net-tools \
+    netcat-openbsd \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Tạo thư mục extra-lib
+RUN mkdir -p /opt/hive/extra-lib
+
+# Tải các JAR cần thiết
+RUN wget -P /opt/hive/extra-lib https://jdbc.postgresql.org/download/postgresql-42.7.4.jar && \
+    wget -P /opt/hive/extra-lib https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.1/hadoop-aws-3.3.1.jar && \
+    wget -P /opt/hive/extra-lib https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar && \
+    wget -P /opt/hive/extra-lib https://repo1.maven.org/maven2/com/zaxxer/HikariCP/5.0.1/HikariCP-5.0.1.jar && \
+    wget -P /opt/hive/lib https://repo1.maven.org/maven2/org/apache/thrift/libthrift/0.14.1/libthrift-0.14.1.jar
+
+# Xóa các JAR xung đột
+RUN rm -f /opt/hadoop/share/hadoop/common/lib/slf4j-log4j12-*.jar && \
+    rm -f /opt/hadoop/share/hadoop/common/lib/slf4j-reload4j-1.7.36.jar && \
+    rm -f /opt/hive/lib/libthrift-0.16.0.jar
+
+# Xóa file cấu hình mặc định
+RUN rm -f /opt/hive/conf/hive-site.xml
+
+# Đảm bảo quyền ghi cho /tmp và /home/hive
+RUN mkdir -p /home/hive /tmp && chmod -R 777 /home/hive /tmp
