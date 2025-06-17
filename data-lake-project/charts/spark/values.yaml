@@ -7,23 +7,23 @@ spark:
       tag: "3.5.1"
     resources:
       requests:
-        memory: "1Gi"
-        cpu: "500m"
-      limits:
         memory: "2Gi"
         cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
   worker:
-    replicaCount: 3
+    replicaCount: 4
     image:
       repository: "bitnami/spark"
       tag: "3.5.1"
     resources:
       requests:
-        memory: "2Gi"
-        cpu: "1000m"
+        memory: "4Gi"
+        cpu: "2000m"
       limits:
-        memory: "3Gi"
-        cpu: "1000m"
+        memory: "6Gi"
+        cpu: "3000m"
   minio:
     endpoint: "http://data-lake-minio-headless.default.svc.cluster.local:9000"
     accessKey: "minio"

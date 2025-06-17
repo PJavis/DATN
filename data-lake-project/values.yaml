@@ -26,6 +26,3 @@ airflowSparkDriverService:
   name: airflow-spark-driver-service
   namespace: default
   port: 7077
-  selector:
-    app.kubernetes.io/name: airflow
-    app.kubernetes.io/component: scheduler

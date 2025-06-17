@@ -11,7 +11,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("WeatherParquetCompaction")
 
-# Khởi tạo SparkSession
+# Khởi tạo SparkSession với tài nguyên tối ưu
 try:
     logger.info("Khởi tạo SparkSession")
     spark = (
@@ -29,51 +29,32 @@ try:
         .config("spark.sql.hive.metastore.uris", "thrift://data-lake-hive:9083")
         .config("spark.sql.hive.metastore.version", "3.1.3")
         .config("spark.hadoop.hive.metastore.sasl.enabled", "false")
-        .config("spark.jars", "/opt/spark/jars/postgresql-42.7.3.jar,/opt/spark/jars/hadoop-aws-3.3.4.jar,/opt/spark/jars/aws-java-sdk-bundle-1.12.761.jar,/opt/spark/jars/spark-sql-kafka-0-10_2.12-3.5.5.jar,/opt/spark/jars/kafka-clients-3.4.1.jar,/opt/spark/jars/spark-streaming-kafka-0-10_2.12-3.5.5.jar,/opt/spark/jars/spark-token-provider-kafka-0-10_2.12-3.5.5.jar,/opt/spark/jars/jsr305-3.0.0.jar,/opt/spark/jars/commons-pool2-2.11.1.jar,/opt/spark/jars/lz4-java-1.8.0.jar,/opt/spark/jars/snappy-java-1.1.10.5.jar")
-        .config("spark.sql.shuffle.partitions", "4")
-        .config("spark.parquet.block.size", "67108864")
+        .config("spark.jars", "/opt/spark/jars/hadoop-aws-3.3.4.jar,/opt/spark/jars/aws-java-sdk-bundle-1.12.761.jar")
+        .config("spark.sql.shuffle.partitions", "4")  # Giảm số phân vùng shuffle
+        .config("spark.default.parallelism", "4")     # Giảm song song
+        .config("spark.driver.memory", "2g")          # Tăng RAM driver
+        .config("spark.executor.memory", "4g")        # Tăng RAM executor
+        .config("spark.executor.cores", "2")          # Tăng CPU
+        .config("spark.parquet.block.size", "33554432")  # Kích thước khối 32MB
+        .config("spark.sql.adaptive.enabled", "true")    # Bật chế độ thích ứng
         .enableHiveSupport()
         .getOrCreate()
     )
     logger.info("Khởi tạo SparkSession thành công")
 except Exception as e:
-    logger.error(f"Lỗi khi khởi tạo SparkSession: {str(e)}")
+    logger.error(f"Lỗi khởi tạo SparkSession: {str(e)}")
     raise e
 
-# Tạo bảng tạm
-try:
-    logger.info("Tạo bảng tạm weather.weather_data_temp")
-    spark.sql("""
-        CREATE TABLE IF NOT EXISTS weather.weather_data_temp (
-            station_id STRING,
-            record_date DATE,
-            temperature_max DOUBLE,
-            precipitation DOUBLE,
-            snow DOUBLE,
-            temperature_min DOUBLE,
-            elevation DOUBLE,
-            name STRING,
-            latitude DOUBLE,
-            longitude DOUBLE
-        )
-        PARTITIONED BY (country_code STRING, year INT, month INT)
-        STORED AS PARQUET
-        LOCATION 's3a://hive-warehouse/weather.db/weather_data_temp'
-    """)
-except Exception as e:
-    logger.error(f"Lỗi khi tạo bảng tạm: {str(e)}")
-    raise e
-
-# Hàm đếm số lượng tệp trong phân vùng
+# Hàm đếm số file trong phân vùng
 def get_partition_file_count(spark, partition_path):
     try:
-        # Đếm tệp Parquet bằng spark.read.parquet
-        df = spark.read.parquet(partition_path)
-        file_count = df.inputFiles().length  # Đếm số tệp đầu vào
-        logger.info(f"Tìm thấy {file_count} tệp trong {partition_path}")
+        fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(spark._jsc.hadoopConfiguration())
+        path = spark._jvm.org.apache.hadoop.fs.Path(partition_path)
+        file_count = len([status for status in fs.listStatus(path) if not status.isDirectory()]) if fs.exists(path) else 0
+        logger.info(f"Phát hiện {file_count} file trong {partition_path}")
         return file_count
     except Exception as e:
-        logger.error(f"Lỗi khi đếm tệp trong {partition_path}: {str(e)}")
+        logger.error(f"Lỗi đếm file trong {partition_path}: {str(e)}")
         return 0
 
 # Hàm nén phân vùng
@@ -81,99 +62,50 @@ def compact_partition(country_code, year, month):
     partition_path = f"s3a://hive-warehouse/weather.db/weather_data/country_code={country_code}/year={year}/month={month}"
     file_count = get_partition_file_count(spark, partition_path)
     
-    if file_count > 10:
-        logger.info(f"Nén phân vùng: country_code={country_code}, year={year}, month={month} với {file_count} tệp")
+    if file_count > 10:  # Tăng ngưỡng lên 10
+        logger.info(f"Tiến hành nén phân vùng: country_code={country_code}, year={year}, month={month} với {file_count} file")
         try:
+            # Tạo bảng tạm
+            temp_table = f"temp_weather_{country_code}_{year}_{month}"
             df = spark.table("weather.weather_data").filter(
                 (col("country_code") == country_code) & 
                 (col("year") == year) & 
                 (col("month") == month)
-            )
+            ).select("station_id", "record_date", "temperature_max", "temperature_min", 
+                     "precipitation", "snow", "elevation", "name", "latitude", "longitude")
             
-            # Chia lại phân vùng và sắp xếp để tối ưu truy vấn
-            df = df.repartition(4).sortWithinPartitions("record_date", "station_id")
+            df.coalesce(1).write.mode("overwrite").saveAsTable(temp_table)
+            spark.sql(f"INSERT OVERWRITE TABLE weather.weather_data PARTITION (country_code='{country_code}', year={year}, month={month}) SELECT * FROM {temp_table}")
+            spark.sql(f"DROP TABLE {temp_table}")
             
-            # Ghi vào bảng tạm
-            df.write.partitionBy("country_code", "year", "month") \
-                .bucketBy(8, "station_id") \
-                .format("parquet") \
-                .option("compression", "snappy") \
-                .mode("overwrite") \
-                .save(f"s3a://hive-warehouse/weather.db/weather_data_temp/country_code={country_code}/year={year}/month={month}")
-            
-            # Cập nhật metadata Hive cho bảng tạm
-            spark.sql(f"""
-                ALTER TABLE weather.weather_data_temp
-                ADD IF NOT EXISTS PARTITION (
-                    country_code='{country_code}',
-                    year={year},
-                    month={month}
-                )
-                LOCATION 's3a://hive-warehouse/weather.db/weather_data_temp/country_code={country_code}/year={year}/month={month}'
-            """)
-            
-            # Chuyển dữ liệu từ bảng tạm sang bảng chính
-            spark.sql(f"""
-                INSERT OVERWRITE TABLE weather.weather_data
-                PARTITION (country_code='{country_code}', year={year}, month={month})
-                SELECT * FROM weather.weather_data_temp
-                WHERE country_code='{country_code}' AND year={year} AND month={month}
-            """)
-            
-            # Xóa phân vùng cũ trong bảng tạm
-            spark.sql(f"""
-                ALTER TABLE weather.weather_data_temp
-                DROP IF EXISTS PARTITION (
-                    country_code='{country_code}',
-                    year={year},
-                    month={month}
-                )
-            """)
-            
-            logger.info(f"Đã nén phân vùng: country_code={country_code}, year={year}, month={month}")
+            logger.info(f"Hoàn tất nén phân vùng: country_code={country_code}, year={year}, month={month}")
         except Exception as e:
-            logger.error(f"Lỗi khi nén phân vùng {country_code}/{year}/{month}: {str(e)}")
+            logger.error(f"Lỗi nén phân vùng {country_code}/{year}/{month}: {str(e)}")
             raise e
     else:
-        logger.info(f"Bỏ qua phân vùng: country_code={country_code}, year={year}, month={month} với {file_count} tệp")
+        logger.info(f"Không nén phân vùng: country_code={country_code}, year={year}, month={month} với {file_count} file")
 
-# Lấy danh sách phân vùng
+# Lấy danh sách phân vùng (giảm xuống 1 để thử nghiệm)
 try:
     logger.info("Lấy danh sách phân vùng từ weather.weather_data")
-    partitions = spark.sql("SHOW PARTITIONS weather.weather_data").collect()
+    partitions = spark.sql("""
+        SELECT country_code, year, month
+        FROM weather.weather_data
+        GROUP BY country_code, year, month
+        LIMIT 1  # Giảm xuống 1 phân vùng để thử nghiệm
+    """).collect()
 except Exception as e:
-    logger.error(f"Lỗi khi lấy danh sách phân vùng: {str(e)}")
+    logger.error(f"Lỗi lấy danh sách phân vùng: {str(e)}")
     partitions = []
 
 # Nén từng phân vùng
 for row in partitions:
-    partition_spec = row["partition"]
-    parts = dict(p.split("=") for p in partition_spec.split("/"))
-    country_code = parts["country_code"]
-    year = int(parts["year"])
-    month = int(parts["month"])
-    compact_partition(country_code, year, month)
-
-# Cập nhật metadata
-try:
-    logger.info("Chạy MSCK REPAIR TABLE")
-    spark.sql("MSCK REPAIR TABLE weather.weather_data")
-except Exception as e:
-    logger.error(f"Lỗi khi chạy MSCK REPAIR TABLE: {str(e)}")
-    raise e
-
-# Xóa bảng tạm
-try:
-    logger.info("Xóa bảng tạm weather.weather_data_temp")
-    spark.sql("DROP TABLE IF EXISTS weather.weather_data_temp")
-except Exception as e:
-    logger.error(f"Lỗi khi xóa bảng tạm: {str(e)}")
-    raise e
+    compact_partition(row["country_code"], row["year"], row["month"])
 
 # Dừng SparkSession
 try:
     logger.info("Dừng SparkSession")
     spark.stop()
 except Exception as e:
-    logger.error(f"Lỗi khi dừng SparkSession: {str(e)}")
+    logger.error(f"Lỗi dừng SparkSession: {str(e)}")
     raise e

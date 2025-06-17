@@ -64,7 +64,7 @@ data:
       </property>
       <property>
         <name>hive.metastore.client.socket.timeout</name>
-        <value>6000</value>
+        <value>9000000</value>
       </property>
       <property>
         <name>hive.metastore.client.connect.retry.delay</name>
@@ -72,7 +72,7 @@ data:
       </property>
       <property>
         <name>hive.metastore.client.connection.timeout</name>
-        <value>1200s</value>
+        <value>990000s</value>
       </property>
       <property>
         <name>hive.metastore.sasl.enabled</name>
@@ -100,7 +100,7 @@ data:
       </property>
       <property>
         <name>hive.metastore.server.max.threads</name>
-        <value>100</value>
+        <value>120</value>
       </property>
       <property>
         <name>hive.metastore.server.min.threads</name>

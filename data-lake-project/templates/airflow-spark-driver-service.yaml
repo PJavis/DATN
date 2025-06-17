@@ -9,7 +9,8 @@ metadata:
 spec:
   clusterIP: None
   selector:
-    app: {{ .Values.airflowSparkDriverService.selector.app }}
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: scheduler
   ports:
   - name: driver
     port: {{ .Values.airflowSparkDriverService.port }}

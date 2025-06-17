@@ -38,8 +38,8 @@ if ! minikube -p "$CLUSTER_NAME" status >/dev/null 2>&1 || [ "$(minikube -p "$CL
   minikube start -p "$CLUSTER_NAME" \
     --nodes 4 \
     --driver=docker \
-    --cpus 2 \
-    --memory 5000 \
+    --cpus 3 \
+    --memory 7000 \
     --extra-config=apiserver.request-timeout=60s
   if [ $? -ne 0 ]; then
     echo "Error: Failed to start Minikube cluster"

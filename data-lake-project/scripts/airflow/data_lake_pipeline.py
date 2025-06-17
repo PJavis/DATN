@@ -80,6 +80,8 @@ with dag2:
             --deploy-mode client \
             --conf spark.driver.bindAddress=0.0.0.0 \
             --conf spark.driver.host=spark-driver-service.default.svc.cluster.local \
+            --conf spark.driver.port=7077 \
+            --conf spark.blockManager.port=7079 \
             --conf spark.port.maxRetries=32 \
             --jars /opt/spark/jars/spark-sql-kafka-0-10_2.12-3.5.5.jar,/opt/spark/jars/kafka-clients-3.4.1.jar,/opt/spark/jars/spark-streaming-kafka-0-10_2.12-3.5.5.jar,/opt/spark/jars/spark-token-provider-kafka-0-10_2.12-3.5.5.jar,/opt/spark/jars/hadoop-aws-3.3.4.jar,/opt/spark/jars/aws-java-sdk-bundle-1.12.761.jar \
             /opt/spark/work-dir/compact_parquet.py && \
@@ -96,3 +98,4 @@ with dag2:
             'AWS_DEFAULT_REGION': 'us-east-1',
         },
     )
+

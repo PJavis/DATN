@@ -73,9 +73,9 @@ trino:
     - key: discovery.uri
       value: "http://data-lake-trino-coordinator:8082"
     - key: discovery.http-client.connect-timeout
-      value: "10s"
+      value: "1000s"
     - key: discovery.http-client.request-timeout
-      value: "10s"
+      value: "1000s"
   additionalCatalogs:
     hive: |
       connector.name=hive
